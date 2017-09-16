@@ -3,7 +3,30 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/) and follow principles of [keep a changelog](http://keepachangelog.com).
 
-<!-- ## Unreleased -->
+## Unreleased
+### Changed
+- Extend DHCP range and reduce lease time to enable more IP addresses (issue #30).
+
+### Fixed
+- Set default locale to "en_GB" instead of "fr_FR" (issue #29).
+
+## Version 1.9.3, 2017-09-11
+
+### Changed
+- Based on Raspbian Stretch Lite version of 2017-09-07.
+- Uses last released version of the [MoodleBox plugin](https://github.com/martignoni/moodlebox-plugin) for Moodle (new Wi-Fi settings options available).
+- Re-enable predictable network interface name, which is now disabled in Stretch image.
+
+## Version 1.9.2, 2017-09-05
+
+### Added
+- Issue #28 implemented: GUI to change Wi-Fi SSID and channel
+
+### Added
+- Change script for compatibility with latest version of the MoodleBox plugin for Moodle (v1.6)
+
+### Fixed
+- Latest version of the MoodleBox plugin for Moodle (v1.6) compatible with commit 46e5099
 
 ## Version 1.9.1, 2017-08-23
 

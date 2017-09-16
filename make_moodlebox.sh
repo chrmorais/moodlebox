@@ -20,7 +20,7 @@
 # A bash script to build automatically a MoodleBox on a Raspberry Pi 3.
 #
 # Instructions:
-# * Clone Rasbpian Jessie Lite on your microSD card
+# * Clone Rasbpian Stretch Lite on your microSD card
 # * Login to your RPi with the user root: `ssh root@raspberrypi.local`
 # * Launch the script
 #
@@ -32,8 +32,8 @@
 # Sets the password that will be set for ALL admin settings of the MoodleBox.
 GENERICPASSWORD="Moodlebox4$"
 #
-# Sets the language used to build the MoodleBox. Used to set the locale of the RPi and the default
-# language of the Moodle installation.
+# Sets the language used to build the MoodleBox. Used to install the locale needed on the RPi
+# and to set the default language of the Moodle installation.
 # Use valid locale codes (see /usr/share/i18n/SUPPORTED).
 LANGUAGE="fr_FR"
 #
@@ -58,8 +58,8 @@ TIMEZONE="Europe/Paris"
 # curl -L https://raw.githubusercontent.com/martignoni/make-moodlebox/master/make_moodlebox.sh | bash
 
 # Version related variables
-VERSION="1.9.1"
-DATE="2017-08-23"
+VERSION="1.9.3"
+DATE="2017-09-11"
 
 # The real thing begins here
 export DEBIAN_FRONTEND="noninteractive"
@@ -134,15 +134,12 @@ EOF
     echo -e "Version: $VERSION, $DATE\n"
 
     # Configure important settings
-    echo -e "\e[93mConfiguring locale to $LANGUAGE...\e[97m"
-    ## Change locale
+    echo -e "\e[93mInstalling locale $LANGUAGE...\e[97m"
+    ## Install locale
     # This uses the $LANGUAGE variable defined at the top of the script
-    # Uncomment line containing $LANGUAGE.UTF-8 and configure locales
+    # Uncomment line containing $LANGUAGE.UTF-8 and generate locale
     sed -i "/^# $LANGUAGE.UTF-8/s/^# //" /etc/locale.gen
     dpkg-reconfigure -f noninteractive locales
-    # Export LANG environment variable and updates the locale
-    export LANG=$LANGUAGE.UTF-8
-    update-locale LANG=$LANGUAGE.UTF-8
 
     echo -e "\e[93mConfiguring timezone to $TIMEZONE...\e[97m"
     ## Change timezone
@@ -187,10 +184,6 @@ EOF
     # Turn off screen blanking
     echo -e "\e[93mTurning off screen blanking...\e[97m"
     sed -i 's/\bconsole=tty1\b/& consoleblank=0/' /boot/cmdline.txt
-
-    # Disable predictable network interface name.
-    echo -e "\e[93mDisable predictable network interface name...\e[97m"
-    sed -i 's/\brootfstype=ext4\b/& net.ifnames=0/' /boot/cmdline.txt
 
     ## Some bash configurations for default account
     cat << "EOF" >> /home/moodlebox/.bashrc
@@ -371,7 +364,7 @@ country_code=$COUNTRY
 interface=wlan0
 # Use the nl80211 driver
 driver=nl80211
-# Wi-Fi network name
+# Wi-Fi network name (SSID)
 ssid=MoodleBox
 # Use the 2.4GHz band
 hw_mode=g
@@ -415,7 +408,7 @@ bogus-priv                  # Don't forward addresses in the non-routed spaces
 domain=moodlebox.me         # Set private domain name to 'moodlebox.me'
 local=/moodlebox.me/        # Don't forward queries for private domain 'moodlebox.me'
 expand-hosts                # Add private domain name to hostnames
-dhcp-range=wifi,10.0.0.100,10.0.0.199,255.255.255.0,12h # Assign IP addresses with 12h lease, subnet name 'wifi'
+dhcp-range=wifi,10.0.0.10,10.0.0.254,255.255.255.0,4h # Assign IP addresses with 4h lease, subnet name 'wifi'
 dhcp-option=wifi,6,10.0.0.1 # Set DNS server for subnet wifi
 txt-record=moodlebox.me,"MoodleBox by Nicolas Martignoni"
 # log-facility=/var/log/dnsmasq.log # Enable log
@@ -464,7 +457,7 @@ server {
   listen 80 default_server;
   listen [::]:80 default_server;
 
-  root /var/www/html;
+  root /var/www/moodle;
 
   index index.php index.html index.htm index.nginx-debian.html;
 
@@ -507,10 +500,10 @@ STOP
     echo -e "\e[93mDownloading Moodle 3.3.x via Git and directories configuration...\e[97m"
     cd /var/www/
     rm -r html
-    git clone --depth=1 -b MOODLE_33_STABLE git://git.moodle.org/moodle.git html
+    git clone --depth=1 -b MOODLE_33_STABLE git://git.moodle.org/moodle.git moodle
     mkdir -p /var/www/moodledata/repository
-    chown -R www-data:www-data /var/www/html /var/www/moodledata/
-    chmod -R ug+w,o-w /var/www/html /var/www/moodledata/
+    chown -R www-data:www-data /var/www/moodle /var/www/moodledata/
+    chmod -R ug+w,o-w /var/www/moodle /var/www/moodledata/
 
     mkdir -p /home/moodlebox/files
     chown -R moodlebox:www-data /home/moodlebox/files
@@ -518,7 +511,7 @@ STOP
     ln -s /home/moodlebox/files /var/www/moodledata/repository
     ln -s /media/USBdrive /var/www/moodledata/repository/usb
 
-    ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+    ln -s /usr/share/phpmyadmin /var/www/moodle/phpmyadmin
 
     ## Configure RAM disk for Moodle cache
     mkdir -p /var/cache/moodle
@@ -538,7 +531,7 @@ EOF
     <p><span lang='en' class='multilang'>MoodleBox is made by <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a>.</span><span lang='fr' class='multilang'>MoodleBox est réalisée par <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a>.</span></p>
     <p><span lang='en' class='multilang'>Version $VERSION, $(LC_ALL=en_GB.utf8 date --date $DATE '+%d %B %Y').</span><span lang='fr' class='multilang'>Version $VERSION, $(LC_ALL=fr_FR.utf8 date --date $DATE '+%d %B %Y').</span></p>"
     # Start installation
-    /usr/bin/php "/var/www/html/admin/cli/install.php" \
+    /usr/bin/php "/var/www/moodle/admin/cli/install.php" \
       --lang=$(echo $LANGUAGE | cut -d"_" -f 1) \
       --wwwroot="http://moodlebox.me" \
       --dataroot="/var/www/moodledata" \
@@ -555,35 +548,35 @@ EOF
       --adminemail="admin@moodlebox.invalid" \
       --non-interactive \
       --agree-license
-    sed -i "/$CFG->directorypermissions/i \$CFG->xsendfile = 'X-Accel-Redirect';\n\$CFG->xsendfilealiases = array ('/dataroot/' => \$CFG->dataroot);\n" /var/www/html/config.php
-    chown www-data:www-data /var/www/html/config.php
-    /usr/bin/php /var/www/html/admin/cli/mysql_compressed_rows.php -f
+    sed -i "/$CFG->directorypermissions/i \$CFG->xsendfile = 'X-Accel-Redirect';\n\$CFG->xsendfilealiases = array ('/dataroot/' => \$CFG->dataroot);\n" /var/www/moodle/config.php
+    chown www-data:www-data /var/www/moodle/config.php
+    /usr/bin/php /var/www/moodle/admin/cli/mysql_compressed_rows.php -f
 
     ## Install last stable version of MoodleBox Admin Moodle plugin
     echo -e "\e[93mMoodleBox plugin installation (via CLI)...\e[97m"
-    cd /var/www/html/admin/tool/
+    cd /var/www/moodle/admin/tool/
     git clone https://github.com/martignoni/moodle-tool_moodlebox.git moodlebox
-    cd /var/www/html/admin/tool/moodlebox
+    cd /var/www/moodle/admin/tool/moodlebox
     # Get latest published tag (see https://gist.github.com/rponte/fdc0724dd984088606b0)
     LASTTAG=$(git describe --abbrev=0 --tags)
     git checkout tags/$LASTTAG
-    touch .reboot-server; touch .shutdown-server; touch .set-server-datetime; touch .newpassword; touch .wifipassword
-    chown -R www-data:www-data /var/www/html/admin/tool/moodlebox
-    chmod -R ug+w,o-w /var/www/html/admin/tool/moodlebox
+    touch .reboot-server; touch .shutdown-server; touch .set-server-datetime; touch .newpassword; touch .wifisettings
+    chown -R www-data:www-data /var/www/moodle/admin/tool/moodlebox
+    chmod -R ug+w,o-w /var/www/moodle/admin/tool/moodlebox
 
-    /usr/bin/php "/var/www/html/admin/cli/upgrade.php" --non-interactive
+    /usr/bin/php "/var/www/moodle/admin/cli/upgrade.php" --non-interactive
 
     # Cron and incron jobs configuration
     echo -e "\e[93mCron and incron jobs configuration...\e[97m"
     ## Configure incron jobs (for restart/shutdown from web interface)
-    (incrontab -l -u root 2>/dev/null; echo "/var/www/html/admin/tool/moodlebox/.reboot-server IN_CLOSE_WRITE /sbin/shutdown -r now") | incrontab -
-    (incrontab -l -u root 2>/dev/null; echo "/var/www/html/admin/tool/moodlebox/.shutdown-server IN_CLOSE_WRITE /sbin/shutdown -h now") | incrontab -
-    (incrontab -l -u root 2>/dev/null; echo "/var/www/html/admin/tool/moodlebox/.set-server-datetime IN_CLOSE_WRITE /bin/bash /var/www/html/admin/tool/moodlebox/.set-server-datetime") | incrontab -
-    (incrontab -l -u root 2>/dev/null; echo "/var/www/html/admin/tool/moodlebox/.newpassword IN_CLOSE_WRITE /bin/bash /var/www/html/admin/tool/moodlebox/bin/changepassword.sh") | incrontab -
-    (incrontab -l -u root 2>/dev/null; echo "/var/www/html/admin/tool/moodlebox/.wifipassword IN_CLOSE_WRITE /bin/bash /var/www/html/admin/tool/moodlebox/bin/setwifipassword.sh") | incrontab -
+    (incrontab -l -u root 2>/dev/null; echo "/var/www/moodle/admin/tool/moodlebox/.reboot-server IN_CLOSE_WRITE /sbin/shutdown -r now") | incrontab -
+    (incrontab -l -u root 2>/dev/null; echo "/var/www/moodle/admin/tool/moodlebox/.shutdown-server IN_CLOSE_WRITE /sbin/shutdown -h now") | incrontab -
+    (incrontab -l -u root 2>/dev/null; echo "/var/www/moodle/admin/tool/moodlebox/.set-server-datetime IN_CLOSE_WRITE /bin/bash /var/www/moodle/admin/tool/moodlebox/.set-server-datetime") | incrontab -
+    (incrontab -l -u root 2>/dev/null; echo "/var/www/moodle/admin/tool/moodlebox/.newpassword IN_CLOSE_WRITE /bin/bash /var/www/moodle/admin/tool/moodlebox/bin/changepassword.sh") | incrontab -
+    (incrontab -l -u root 2>/dev/null; echo "/var/www/moodle/admin/tool/moodlebox/.wifisettings IN_CLOSE_WRITE /bin/bash /var/www/moodle/admin/tool/moodlebox/bin/changewifisettings.sh") | incrontab -
 
     ## Configure cron jobs
-    (crontab -l -u root 2>/dev/null; echo "*/3 * * * * nice -n 10 ionice -c2 /usr/bin/php /var/www/html/admin/cli/cron.php") | crontab -
+    (crontab -l -u root 2>/dev/null; echo "*/3 * * * * nice -n 10 ionice -c2 /usr/bin/php /var/www/moodle/admin/cli/cron.php") | crontab -
     (crontab -l -u root 2>/dev/null; echo "*/20 * * * * rsync -a --delete /var/cache/moodle/ /var/cache/moodle-cache-backup/") | crontab -
     (crontab -l -u root 2>/dev/null; echo "@reboot cp -Rpf /var/cache/moodle-cache-backup/* /var/cache/moodle/") | crontab -
 
