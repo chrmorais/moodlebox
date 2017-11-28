@@ -24,7 +24,7 @@
 # * Login to your RPi with the user root: `ssh root@raspberrypi.local`
 # * Launch the script
 #
-# Source: https://github.com/martignoni/make-moodlebox
+# Source: https://github.com/martignoni/moodlebox
 
 # #############################################################################
 # Change these variables to customize your build
@@ -42,7 +42,7 @@ COUNTRY="CH"
 #
 # The timezone of the place where you'll use your MoodleBox.
 # Use standard IANA time zone database identifiers (see output of timedatectl list-timezones).
-TIMEZONE="Europe/Paris"
+TIMEZONE=Europe/Paris
 #
 # #############################################################################
 # Do NOT change anything under this line.
@@ -54,11 +54,11 @@ TIMEZONE="Europe/Paris"
 # This script MUST be run as root
 [[ $EUID -ne 0 ]] && { echo "This script must be run as root"; exit 1; }
 # e.g. it can be launched from the root account like this
-# curl -L https://raw.githubusercontent.com/martignoni/make-moodlebox/master/make_moodlebox.sh | bash
+# curl -L https://raw.githubusercontent.com/martignoni/moodlebox/master/make_moodlebox.sh | bash
 
 # Version related variables
-VERSION="1.9.4"
-DATE="2017-09-29"
+VERSION="2.0.1"
+DATE="2017-11-27"
 
 # The real thing begins here
 export DEBIAN_FRONTEND="noninteractive"
@@ -86,7 +86,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 
 case "$1" in
     start)
-        curl -L https://raw.githubusercontent.com/martignoni/make-moodlebox/master/make_moodlebox.sh | bash
+        curl -L https://raw.githubusercontent.com/martignoni/moodlebox/master/make_moodlebox.sh | bash
         ;;
     *)
         echo "Usage: $0 start" >&2
@@ -136,9 +136,9 @@ EOF
     echo -e "\e[93mInstalling locale $LANGUAGES...\e[97m"
     ## Install locales
     # This uses the $LANGUAGES variable defined at the top of the script
-    for LANG in $LANGUAGES; do
-        # Uncomment lines containing $LANG.UTF-8
-        sed -i "/^# $LANG.UTF-8/s/^# //" /etc/locale.gen
+    for THELANG in $LANGUAGES; do
+        # Uncomment lines containing $THELANG.UTF-8
+        sed -i "/^# $THELANG.UTF-8/s/^# //" /etc/locale.gen
     done
     # Generate locales.
     dpkg-reconfigure -f noninteractive locales
@@ -146,7 +146,7 @@ EOF
     echo -e "\e[93mConfiguring timezone to $TIMEZONE...\e[97m"
     ## Change timezone
     # This uses the $TIMEZONE variable defined at the top of the script
-    echo $TIMEZONE > /etc/timezone
+    ln -fs /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
     dpkg-reconfigure -f noninteractive tzdata
 
     echo -e "\e[93mConfiguring Wi-Fi country to $COUNTRY...\e[97m"
@@ -298,40 +298,11 @@ STOP
     echo -e "\e[93mAccess point and network configuration...\e[97m"
     # 1. /etc/dhcpcd.conf
     cat << "EOF" >> /etc/dhcpcd.conf
-
-denyinterfaces wlan0
+interface wlan0
+static ip_address=10.0.0.1/24
 EOF
 
-    # 2. /etc/network/interfaces
-    cat << "EOF" > /etc/network/interfaces
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-source-directory /etc/network/interfaces.d
-
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet dhcp
-iface eth0 inet6 auto
-
-allow-hotplug wlan0
-iface wlan0 inet static
-    address 10.0.0.1
-    netmask 255.255.255.0
-    network 10.0.0.0
-    broadcast 10.0.0.255
-
-allow-hotplug wlan1
-iface wlan1 inet manual
-    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
-EOF
-
-    # 3. /etc/hostapd/hostapd.conf
+    # 2. /etc/hostapd/hostapd.conf
     cat << EOF > /etc/hostapd/hostapd.conf
 # Set country code
 country_code=$COUNTRY
@@ -343,7 +314,7 @@ driver=nl80211
 ssid=MoodleBox
 # Use the 2.4GHz band
 hw_mode=g
-# Set Wi-Fi channel
+# The Wi-Fi channel
 channel=13
 # Enable 802.11n
 ieee80211n=1
@@ -370,14 +341,14 @@ EOF
 
     sed -i '/#DAEMON_CONF/c\DAEMON_CONF="/etc/hostapd/hostapd.conf"' /etc/default/hostapd
 
-    # 4. /etc/dnsmasq.conf
-    cat << "EOF" > /etc/dnsmasq.conf
+    # 3. /etc/dnsmasq.conf
+    cat << EOF > /etc/dnsmasq.conf
 interface=wlan0             # Use interface wlan0
 listen-address=127.0.0.1    # Explicitly specify the address to listen on
 listen-address=10.0.0.1     # Explicitly specify the address to listen on
 bind-interfaces             # Make sure we aren't sending things elsewhere
-server=209.244.0.3          # Forward DNS requests to Level3 DNS
-server=209.244.0.4          # Forward DNS requests to Level3 DNS
+server=84.200.69.80         # Forward DNS requests to external public DNS
+server=84.200.70.40         # Forward DNS requests to external public DNS
 domain-needed               # Don't forward short names
 bogus-priv                  # Don't forward addresses in the non-routed spaces
 domain=home                 # Set private domain name to 'home'
@@ -385,9 +356,13 @@ local=/home/                # Don't forward queries for private domain 'home'
 expand-hosts                # Add private domain name to hostnames
 dhcp-range=wifi,10.0.0.10,10.0.0.254,255.255.255.0,4h # Assign IP addresses with 4h lease, subnet name 'wifi'
 dhcp-option=wifi,6,10.0.0.1 # Set DNS server for subnet wifi
-txt-record=moodlebox.home,"MoodleBox by Nicolas Martignoni"
-# log-facility=/var/log/dnsmasq.log # Enable log
+txt-record=moodlebox.home,"MoodleBox version ${VERSION}, by Nicolas Martignoni"
+log-facility=/var/log/dnsmasq.log # Enable log
 EOF
+
+    # 4. /lib/systemd/system/dnsmasq.service
+    sed -i 's/^\[Install\]\s*$/RestartSec=5\n\n&/' /lib/systemd/system/dnsmasq.service
+    sed -i '/RestartSec=5/a \Restart=on-failure' /lib/systemd/system/dnsmasq.service
 
     # 5. /etc/sysctl.conf
     sed -i '/#net.ipv4.ip_forward/c\net.ipv4.ip_forward=1' /etc/sysctl.conf
@@ -472,19 +447,23 @@ FLUSH PRIVILEGES;
 STOP
 
     ## Download Moodle via git and create all needed directories, with adequate permissions
-    echo -e "\e[93mDownloading Moodle 3.3.x via Git and directories configuration...\e[97m"
+    echo -e "\e[93mDownloading Moodle 3.4.x via Git and directories configuration...\e[97m"
     cd /var/www/
     rm -r html
-    git clone --depth=1 -b MOODLE_33_STABLE git://git.moodle.org/moodle.git moodle
+    git clone --depth=1 -b MOODLE_34_STABLE git://git.moodle.org/moodle.git moodle
     mkdir -p /var/www/moodledata/repository
-    chown -R www-data:www-data /var/www/moodle /var/www/moodledata/
-    chmod -R ug+w,o-w /var/www/moodle /var/www/moodledata/
+    mkdir -p /var/www/moodledata/backup
+    mkdir -p /var/www/moodledata/temp
+    chown -R www-data:www-data /var/www/moodle /var/www/moodledata
+    chmod -R ug+w,o-w /var/www/moodle /var/www/moodledata
+    chmod -R g+s /var/www/moodledata
 
     mkdir -p /home/moodlebox/files
     chown -R moodlebox:www-data /home/moodlebox/files
     chmod g+s /home/moodlebox/files
     ln -s /home/moodlebox/files /var/www/moodledata/repository
     ln -s /media/usb /var/www/moodledata/repository/usb
+    ln -s /var/www/moodledata/backup /var/www/moodledata/temp/backup
 
     ln -s /usr/share/phpmyadmin /var/www/moodle/phpmyadmin
 
@@ -495,16 +474,16 @@ STOP
 
     cat << "EOF" >> /etc/fstab
 tmpfs /var/cache/moodle tmpfs size=64M,mode=775,uid=www-data,gid=www-data 0 0
-tmpfs /var/www/moodledata/temp tmpfs size=128M,mode=775,uid=www-data,gid=www-data 0 0
+tmpfs /var/www/moodledata/temp tmpfs size=64M,mode=775,uid=www-data,gid=www-data 0 0
 tmpfs /var/www/moodledata/sessions tmpfs size=16M,mode=775,uid=www-data,gid=www-data 0 0
 EOF
 
     ## Install Moodle via cli
     echo -e "\e[93mMoodle installation (via CLI)...\e[97m"
     # Summary to be displayed on the front page
-    SUMMARY="<p><span lang='en' class='multilang'><a href='https://moodlebox.net/' target='_blank'>MoodleBox</a>, a <a href='https://moodle.org/' target='_blank'>Moodle 3.3.x</a> platform on <a href='https://www.raspberrypi.org/' target='_blank'>Raspberry Pi&nbsp;3</a>.</span><span lang='fr' class='multilang'><a href='https://moodlebox.net/' target='_blank'>MoodleBox</a>, une plateforme <a href='https://moodle.org/' target='_blank'>Moodle 3.3.x</a> sur <a href='https://www.raspberrypi.org/' target='_blank'>Raspberry Pi&nbsp;3</a>.</span></p>
-    <p><span lang='en' class='multilang'>MoodleBox is made by <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a>.</span><span lang='fr' class='multilang'>MoodleBox est réalisée par <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a>.</span></p>
-    <p><span lang='en' class='multilang'>Version $VERSION, $(LC_ALL=en_GB.utf8 date --date $DATE '+%d %B %Y').</span><span lang='fr' class='multilang'>Version $VERSION, $(LC_ALL=fr_FR.utf8 date --date $DATE '+%d %B %Y').</span></p>"
+    SUMMARY="<p><span lang='en' class='multilang'><a href='https://moodlebox.net/' target='_blank'>MoodleBox</a>, a <a href='https://moodle.org/' target='_blank'>Moodle 3.4.x</a> platform on <a href='https://www.raspberrypi.org/' target='_blank'>Raspberry Pi&nbsp;3</a>.</span><span lang='fr' class='multilang'><a href='https://moodlebox.net/' target='_blank'>MoodleBox</a>, une plateforme <a href='https://moodle.org/' target='_blank'>Moodle 3.4.x</a> sur <a href='https://www.raspberrypi.org/' target='_blank'>Raspberry Pi&nbsp;3</a>.</span><span lang='de' class='multilang'><a href='https://moodlebox.net/' target='_blank'>MoodleBox</a>, eine <a href='https://moodle.org/' target='_blank'>Moodle 3.4.x</a> Plattform auf <a href='https://www.raspberrypi.org/' target='_blank'>Raspberry Pi 3</a>.</span></p>
+    <p><span lang='en' class='multilang'>MoodleBox is made by <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a>.</span><span lang='fr' class='multilang'>MoodleBox est réalisée par <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a>.</span><span lang='de' class='multilang'>MoodleBox ist von <a href='mailto:nicolas@martignoni.net'>Nicolas Martignoni</a> hergestellt.</span></p>
+    <p><span lang='en' class='multilang'>Version $VERSION, $(LC_ALL=en_GB.utf8 date --date $DATE '+%-d %B %Y').</span><span lang='fr' class='multilang'>Version $VERSION, $(LC_ALL=fr_FR.utf8 date --date $DATE '+%-d %B %Y').</span><span lang='de' class='multilang'>Version $VERSION, $(LC_ALL=de_DE.utf8 date --date $DATE '+%-d %B %Y').</span></p>"
     # Start installation
     /usr/bin/php "/var/www/moodle/admin/cli/install.php" \
       --lang="en" \
@@ -541,6 +520,11 @@ EOF
 
     /usr/bin/php "/var/www/moodle/admin/cli/upgrade.php" --non-interactive
 
+    ## Download MathJax library from git repository, with adequate permissions
+    echo -e "\e[93mMathJax library installation via Git...\e[97m"
+    git clone --depth=1 git://github.com/mathjax/MathJax.git /var/www/moodle/lib/MathJax
+    chmod -R ug+w,o-w /var/www/moodle/lib/MathJax
+
     # Cron and incron jobs configuration
     echo -e "\e[93mCron and incron jobs configuration...\e[97m"
     ## Configure incron jobs (for restart/shutdown from web interface)
@@ -554,6 +538,12 @@ EOF
     (crontab -l -u root 2>/dev/null; echo "*/3 * * * * nice -n 10 ionice -c2 /usr/bin/php /var/www/moodle/admin/cli/cron.php") | crontab -
     (crontab -l -u root 2>/dev/null; echo "*/20 * * * * rsync -a --delete /var/cache/moodle/ /var/cache/moodle-cache-backup/") | crontab -
     (crontab -l -u root 2>/dev/null; echo "@reboot cp -Rpf /var/cache/moodle-cache-backup/* /var/cache/moodle/") | crontab -
+    (crontab -l -u root 2>/dev/null; echo "*/15 * * * * touch /var/www/moodledata/backup/moodlebox.mbz") | crontab -
+    (crontab -l -u root 2>/dev/null; echo "@reboot ln -s /var/www/moodledata/backup /var/www/moodledata/temp/backup") | crontab -
+
+    ## Add file containing MoodleBox version and date
+    echo -e "MoodleBox image version ${VERSION}, ${DATE}\nMoodleBox is made by Nicolas Martignoni, nicolas@martignoni.net\nGenerated using https://github.com/martignoni/moodlebox" > "/etc/moodlebox-info"
+    chmod 644 "/etc/moodlebox-info"
 
     ## Cleanup tasks
     echo -e "\e[93mCleaning up...\e[97m"

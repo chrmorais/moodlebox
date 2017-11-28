@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/) and follow principles of [keep a changelog](http://keepachangelog.com).
 
+## Version 2.0.1, 2017-11-27
+### Fixed
+- Bug when trying to restore courses now really fixed (issue #45).
+
+## Version 2.0, 2017-11-18
+### Changed
+- Updated to Moodle 3.4 (issue #44).
+- Public DNS changed to more neutral ones (DNS.WATCH).
+
+### Added
+- MathJax library added to enable it to function when MoodleBox disconnected from Internet (issue #43).
+
+### Fixed
+- Bug when trying to restore courses is fixed (issue #45).
+
+## Version 1.9.5, 2017-11-01
+### Changed
+- Network configuration updated, for better maintainability (issue #39).
+- Enable separate log file for dnsmasq.
+
+### Added
+- File created on the MoodleBox to allow easy finding of version (issue #38).
+- German version of summary texts added (see issue #36).
+
+### Fixed
+- Course backup size is no more limited by size of RAM temp partition (issue #18).
+- Miscellaneous small fixes.
+
 ## Version 1.9.4, 2017-09-29
 ### Changed
 - Extend DHCP range and reduce lease time to enable more IP addresses (issue #30).
