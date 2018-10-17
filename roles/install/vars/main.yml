@@ -1,0 +1,19 @@
+moodlebox_install_packages:
+  - iptables-persistent
+  - hostapd
+  - dnsmasq
+  - git
+  - ntfs-3g
+  - exfat-fuse
+  - lockfile-progs
+  - incron
+  - nginx
+  - php7.2-fpm
+  - php7.2-cli
+  - php7.2-xmlrpc
+  - php7.2-curl
+  - php7.2-gd
+  - php7.2-intl
+  - php7.2-soap
+  - php7.2-mysql
+  - php-apcu

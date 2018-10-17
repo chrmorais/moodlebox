@@ -1,0 +1,44 @@
+---
+
+- name: get MoodleBox plugin from git repository
+  git:
+    repo: 'https://github.com/moodlebox/moodle-tool_moodlebox.git'
+    dest: '{{ moodlebox_moodle_source_dir }}/admin/tool/moodlebox'
+    version: '{{ moodlebox_moodlebox_plugin_version }}'
+
+- name: touch files for MoodleBox plugin functionality
+  file:
+    path: '{{ moodlebox_moodle_source_dir }}/admin/tool/moodlebox/{{ item }}'
+    state: 'touch'
+  with_items:
+    - '.reboot-server'
+    - '.shutdown-server'
+    - '.set-server-datetime'
+    - '.newpassword'
+    - '.wifisettings'
+    - '.resize-partition'
+
+- name: change MoodleBox plugin file permissions
+  file:
+    path: '{{ moodlebox_moodle_source_dir }}/admin/tool/moodlebox'
+    state: 'directory'
+    owner: '{{ moodlebox_username }}'
+    group: 'www-data'
+    mode: 'ug+w,o-w'
+    recurse: 'yes'
+
+- name: create sudoers file
+  copy:
+    src: 'etc/sudoers.d/020_www-data-nopasswd'
+    dest: '/etc/sudoers.d/020_www-data-nopasswd'
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: install MoodleBox plugin via CLI
+  command: '/usr/bin/php "{{ moodlebox_moodle_source_dir }}/admin/cli/upgrade.php"
+    --allow-unstable
+    --non-interactive'
+  args:
+    chdir: '{{ moodlebox_moodle_source_dir }}'
+  register: moodlebox_plugin_installed
+  changed_when: moodlebox_plugin_installed.rc == 0
